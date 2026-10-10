@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vercel/
+*.log
+.DS_Store
+
+# SHARP(方式B)の重みと出力は再配布しない方針のためコミットしない
+*.ply
+*.spz
+*.splat
+sharp/
+models/sharp/
+
+# Phase 0 のサンプル写真（個人の写真のためコミットしない）
+samples/
