@@ -52,3 +52,4 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   #panel { border-left: none; max-height: none; }
 }
 body.dragging #stage-wrap { outline: 3px dashed var(--accent); outline-offset: -8px; }
+button[aria-pressed=true] { border-color: var(--accent); color: var(--accent); }

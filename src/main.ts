@@ -165,6 +165,11 @@ $<HTMLButtonElement>('#gyro').addEventListener('click', async () => {
   setStatus(ok ? '傾きで視点が動きます。「中央に戻す」で基準を取り直せます' : '傾きの許可が得られませんでした。ドラッグで操作してください');
 });
 $<HTMLButtonElement>('#recenter').addEventListener('click', () => viewer.recenter());
+const autoButton = $<HTMLButtonElement>('#auto');
+autoButton.addEventListener('click', () => {
+  viewer.autoMotion = !viewer.autoMotion;
+  autoButton.setAttribute('aria-pressed', String(viewer.autoMotion));
+});
 
 // --- 採点フォーム ---
 const categorySelect = $<HTMLSelectElement>('#category');
