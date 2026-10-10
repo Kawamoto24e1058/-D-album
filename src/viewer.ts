@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { DepthMap } from './depth';
+import { Particles, type EffectKind } from './effects';
 
 /*
  * 表示の考え方
@@ -33,25 +34,37 @@ const frontFragment = /* glsl */ `
   uniform sampler2D uDepth;
   uniform vec2 uTexel;
   uniform float uEdge;
+  uniform float uReveal;
   varying vec2 vUv;
   void main() {
     vec2 duv = vec2(vUv.x, 1.0 - vUv.y);
+    float depth = texture2D(uDepth, duv).r;
     float dx = texture2D(uDepth, duv + vec2(uTexel.x, 0.0)).r - texture2D(uDepth, duv - vec2(uTexel.x, 0.0)).r;
     float dy = texture2D(uDepth, duv + vec2(0.0, uTexel.y)).r - texture2D(uDepth, duv - vec2(0.0, uTexel.y)).r;
     float grad = length(vec2(dx, dy));
     float alpha = uEdge >= 1.0 ? 1.0 : 1.0 - smoothstep(uEdge * 0.5, uEdge, grad);
     if (alpha < 0.02) discard;
-    gl_FragColor = vec4(texture2D(uPhoto, vUv).rgb, alpha);
+    vec3 color = texture2D(uPhoto, vUv).rgb;
+    // 読み込み時: 光の線が手前から奥へ走り、通った所から色が付く
+    if (uReveal < 1.0) {
+      float front = 1.0 - uReveal * 1.2;
+      float band = 1.0 - smoothstep(0.0, 0.06, abs(depth - front));
+      float shown = smoothstep(front - 0.02, front + 0.02, depth);
+      color = mix(color * 0.15, color, shown) + vec3(0.55, 0.8, 1.0) * band * 1.2;
+    }
+    gl_FragColor = vec4(color, alpha);
     #include <colorspace_fragment>
   }
 `;
 
 const backFragment = /* glsl */ `
   uniform sampler2D uPhoto;
+  uniform float uReveal;
   varying vec2 vUv;
   void main() {
     // 背面は少し暗くして、前景との境目を目立たなくする
-    gl_FragColor = vec4(texture2D(uPhoto, vUv).rgb * 0.92, 1.0);
+    float dim = uReveal < 1.0 ? mix(0.15, 0.92, uReveal) : 0.92;
+    gl_FragColor = vec4(texture2D(uPhoto, vUv).rgb * dim, 1.0);
     #include <colorspace_fragment>
   }
 `;
@@ -102,11 +115,15 @@ export interface ViewerParams {
 
 const D0 = 1;
 const FOV = 40;
+const REVEAL_SEC = 1.8;
+
+export type CameraMode = 'sway' | 'dolly' | 'push';
 
 export class Viewer {
   readonly params: ViewerParams = { depthScale: 1.0, maxOffset: 0.1, edge: 0.15 };
-  /** 操作がないときに、ゆっくり視点を回して立体感を見せる */
+  /** 操作がないときに、カメラワークを自動で再生する */
   autoMotion = true;
+  cameraMode: CameraMode = 'sway';
   /** 直近 1 秒の平均 fps */
   fps = 0;
 
@@ -129,6 +146,8 @@ export class Viewer {
   private keys = new THREE.Vector2();
   private lastInput = -Infinity;
   private autoPhase = 0;
+  private reveal = 1;
+  private particles: Particles;
 
   private pixelRatio = Math.min(window.devicePixelRatio, 2);
   private frames = 0;
@@ -141,10 +160,32 @@ export class Viewer {
     this.renderer.setClearColor(0x111111);
     container.appendChild(this.renderer.domElement);
     this.scene.add(this.group);
+    this.particles = new Particles({
+      tanX: () => this.size.x / 2 / D0,
+      tanY: () => this.size.y / 2 / D0,
+      near: 0.55 * D0,
+      far: 2.2 * D0,
+    });
+    this.scene.add(this.particles.object);
     this.bindInput();
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
     this.renderer.setAnimationLoop(() => this.tick());
+  }
+
+  setEffect(kind: EffectKind) {
+    this.particles.setKind(kind);
+  }
+
+  setCameraMode(mode: CameraMode) {
+    this.cameraMode = mode;
+    this.autoPhase = 0;
+    this.resize();
+  }
+
+  /** 読み込み時の演出をもう一度再生する */
+  replayReveal() {
+    this.reveal = 0;
   }
 
   show(photo: HTMLCanvasElement, depth: DepthMap) {
@@ -170,6 +211,7 @@ export class Viewer {
       uStrength: { value: this.params.depthScale },
       uD0: { value: D0 },
       uSize: { value: this.size },
+      uReveal: { value: 0 },
     };
     // 背面レイヤーはわずかに奥へ置き、前景と重なったときに手前へ出ないようにする
     const back = new THREE.ShaderMaterial({
@@ -198,6 +240,7 @@ export class Viewer {
 
     this.current.set(0, 0);
     this.autoPhase = 0;
+    this.reveal = 0;
     this.resize();
   }
 
@@ -286,8 +329,11 @@ export class Viewer {
     // 距離 D0 の面で、写真が画面に収まる大きさにする（視点を動かしても端が見えにくいよう少し余白を取る）
     const visibleH = 2 * D0 * Math.tan(THREE.MathUtils.degToRad(FOV / 2));
     const visibleW = visibleH * this.camera.aspect;
-    const fill = 0.94;
-    if (this.aspect > this.camera.aspect) this.size.set(visibleW * fill, (visibleW * fill) / this.aspect);
+    // 揺れは写真全体を見せる。前後に動くカメラワークは端が見えないよう画面を覆う大きさにする
+    const cover = this.cameraMode !== 'sway';
+    const fill = this.cameraMode === 'dolly' ? 1.25 : cover ? 1.12 : 0.94;
+    const wide = this.aspect > this.camera.aspect;
+    if (wide !== cover) this.size.set(visibleW * fill, (visibleW * fill) / this.aspect);
     else this.size.set(visibleH * fill * this.aspect, visibleH * fill);
   }
 
@@ -296,7 +342,13 @@ export class Viewer {
     const dt = Math.min((now - this.last) / 1000, 0.1);
     this.last = now;
 
-    for (const m of this.materials) m.uniforms.uStrength.value = this.params.depthScale;
+    if (this.reveal < 1) this.reveal = Math.min(1, this.reveal + dt / REVEAL_SEC);
+    const grow = 1 - Math.pow(1 - this.reveal, 3);
+    for (const m of this.materials) {
+      m.uniforms.uStrength.value = this.params.depthScale * grow;
+      m.uniforms.uReveal.value = this.reveal;
+    }
+    this.particles.update(dt, now / 1000);
     if (this.materials[1]) this.materials[1].uniforms.uEdge.value = this.params.edge;
 
     if (this.keys.lengthSq() > 0) {
@@ -306,9 +358,12 @@ export class Viewer {
     }
     // 2 秒操作がなければ、ゆっくり円を描くように視点を動かす
     const idle = now - this.lastInput > 2000 && !this.dragging && !this.gyroActive;
-    if (this.autoMotion && idle) {
-      this.autoPhase += dt * 0.6;
-      this.target.set(Math.sin(this.autoPhase) * 0.8, Math.sin(this.autoPhase * 2) * 0.25);
+    const playing = this.autoMotion && this.reveal >= 1;
+    if (playing) this.autoPhase += dt;
+    if (this.cameraMode !== 'sway') {
+      if (idle && this.keys.lengthSq() === 0) this.target.set(0, 0);
+    } else if (this.autoMotion && idle) {
+      this.target.set(Math.sin(this.autoPhase * 0.6) * 0.8, Math.sin(this.autoPhase * 1.2) * 0.25);
     } else if (!this.autoMotion && idle && this.keys.lengthSq() === 0) {
       this.target.set(0, 0);
     }
@@ -318,8 +373,25 @@ export class Viewer {
 
     // 距離 D0 の点を中心に回り込む（中間の深度は止まり、手前と奥が逆向きに動く）
     const m = this.params.maxOffset * D0;
-    this.camera.position.set(this.current.x * m, this.current.y * m, 0);
-    this.camera.lookAt(0, 0, -D0);
+    // 前後のカメラワーク。0→1→0 をゆっくり往復する
+    const wave = (1 - Math.cos(this.autoPhase * 0.5)) / 2;
+    let forward = 0;
+    let fov = FOV;
+    if (this.cameraMode === 'dolly') {
+      // ドリーズーム: 前進しながら画角を広げ、距離 D0 の面の大きさを保つ。背景だけが遠のく
+      forward = wave * 0.3 * D0;
+      fov = THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * D0) / (D0 - forward)));
+    } else if (this.cameraMode === 'push') {
+      // 押し込み: 写真の中へゆっくり入っていく
+      forward = wave * 0.3 * D0;
+    }
+    if (this.camera.fov !== fov) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    const swayX = this.cameraMode === 'push' ? Math.sin(this.autoPhase * 0.35) * 0.3 : 0;
+    this.camera.position.set((this.current.x + swayX) * m, this.current.y * m, -forward);
+    this.camera.lookAt((this.current.x + swayX) * m * 0.3, 0, -D0);
     this.renderer.render(this.scene, this.camera);
 
     this.frames++;

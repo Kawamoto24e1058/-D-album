@@ -28,10 +28,30 @@
           </label>
           <button id="gyro" type="button">傾きで動かす</button>
           <button id="recenter" type="button">中央に戻す</button>
-          <button id="auto" type="button" aria-pressed="true">自動で揺らす</button>
+          <button id="auto" type="button" aria-pressed="true">自動再生</button>
         </div>
 
         <ul id="photos" aria-label="読み込んだ写真"></ul>
+
+        <fieldset>
+          <legend>見せ方</legend>
+          <label>カメラワーク
+            <select id="cameraMode">
+              <option value="sway">ゆらぎ（覗き込み）</option>
+              <option value="dolly">ドリーズーム（背景が遠のく）</option>
+              <option value="push">押し込み（写真の中へ）</option>
+            </select>
+          </label>
+          <label>演出
+            <select id="effect">
+              <option value="none">なし</option>
+              <option value="snow">雪</option>
+              <option value="sakura">桜</option>
+              <option value="light">光の粒</option>
+            </select>
+          </label>
+          <div class="row"><button id="replay" type="button">立ち上がりを再生</button></div>
+        </fieldset>
 
         <fieldset>
           <legend>表示パラメータ</legend>

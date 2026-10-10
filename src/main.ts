@@ -1,7 +1,8 @@
 import './style.css';
 import { loadDepthEstimator, type DepthEstimator, type DepthMap } from './depth';
 import { loadPhoto, type LoadedPhoto } from './image';
-import { Viewer, type ViewerParams } from './viewer';
+import { Viewer, type CameraMode, type ViewerParams } from './viewer';
+import type { EffectKind } from './effects';
 import {
   CATEGORIES, CRITERIA, average, loadRows, saveRows, summarize, toCsv,
   type CriterionKey, type ScoreRow,
@@ -165,6 +166,13 @@ $<HTMLButtonElement>('#gyro').addEventListener('click', async () => {
   setStatus(ok ? '傾きで視点が動きます。「中央に戻す」で基準を取り直せます' : '傾きの許可が得られませんでした。ドラッグで操作してください');
 });
 $<HTMLButtonElement>('#recenter').addEventListener('click', () => viewer.recenter());
+$<HTMLSelectElement>('#cameraMode').addEventListener('change', (e) => {
+  viewer.setCameraMode((e.target as HTMLSelectElement).value as CameraMode);
+});
+$<HTMLSelectElement>('#effect').addEventListener('change', (e) => {
+  viewer.setEffect((e.target as HTMLSelectElement).value as EffectKind);
+});
+$<HTMLButtonElement>('#replay').addEventListener('click', () => viewer.replayReveal());
 const autoButton = $<HTMLButtonElement>('#auto');
 autoButton.addEventListener('click', () => {
   viewer.autoMotion = !viewer.autoMotion;
