@@ -51,3 +51,4 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   #stage-wrap { min-height: 60dvh; }
   #panel { border-left: none; max-height: none; }
 }
+body.dragging #stage-wrap { outline: 3px dashed var(--accent); outline-offset: -8px; }

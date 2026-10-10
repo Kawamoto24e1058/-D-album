@@ -39,10 +39,36 @@ function getEstimator(): Promise<DepthEstimator> {
 }
 
 // --- 写真の追加（終わったものから順に表示する） ---
-$<HTMLInputElement>('#file').addEventListener('change', async (ev) => {
+// accept は "image/*" にする。MIME を列挙すると、macOS のファイル選択の「写真」から選べなくなる
+$<HTMLInputElement>('#file').addEventListener('change', (ev) => {
   const input = ev.target as HTMLInputElement;
   const files = Array.from(input.files ?? []);
   input.value = '';
+  void addFiles(files);
+});
+
+// 写真アプリや Finder からのドラッグ&ドロップでも追加できる
+window.addEventListener('dragover', (ev) => {
+  ev.preventDefault();
+  document.body.classList.add('dragging');
+});
+window.addEventListener('dragleave', (ev) => {
+  if (ev.relatedTarget === null) document.body.classList.remove('dragging');
+});
+window.addEventListener('drop', (ev) => {
+  ev.preventDefault();
+  document.body.classList.remove('dragging');
+  const files = Array.from(ev.dataTransfer?.files ?? []).filter(
+    (f) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|hei[cf])$/i.test(f.name),
+  );
+  if (!files.length) {
+    setStatus('画像ファイルをドロップしてください');
+    return;
+  }
+  void addFiles(files);
+});
+
+async function addFiles(files: File[]) {
   if (!files.length) return;
 
   let est: DepthEstimator;
@@ -76,7 +102,7 @@ $<HTMLInputElement>('#file').addEventListener('change', async (ev) => {
     }
   }
   setStatus(`${entries.length} 枚を読み込みました。ドラッグ、矢印キー、または傾きで視点を動かせます`);
-});
+}
 
 function select(index: number) {
   currentIndex = index;

@@ -10,7 +10,7 @@
   <body>
     <header>
       <h1>思い出アルバム3D <small>Phase 0 品質検証</small></h1>
-      <p id="status" role="status">写真を選ぶとモデルを読み込みます。写真は端末の外に送信しません。</p>
+      <p id="status" role="status">写真を選ぶ（またはドラッグ&amp;ドロップする）とモデルを読み込みます。写真は端末の外に送信しません。</p>
     </header>
 
     <main>
@@ -24,7 +24,7 @@
         <div class="row">
           <label class="button primary">
             写真を追加
-            <input id="file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
+            <input id="file" type="file" accept="image/*" multiple hidden />
           </label>
           <button id="gyro" type="button">傾きで動かす</button>
           <button id="recenter" type="button">中央に戻す</button>
